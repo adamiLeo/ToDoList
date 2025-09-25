@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>To-Do List com Prioridades</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Minha Lista de Tarefas</h1>
+        
+        <div class="form-add">
+            <input type="text" id="nova-tarefa-input" placeholder="O que precisa ser feito?">
+            <select id="nova-tarefa-prioridade">
+                <option value="3">Alta</option>
+                <option value="2" selected>Média</option>
+                <option value="1">Baixa</option>
+            </select>
+            <button onclick="adicionarTarefa()">Adicionar</button>
+        </div>
+
+        <ul id="lista-tarefas">
+            {% for tarefa in tarefas %}
+                <li id="tarefa-{{ tarefa['id'] }}" class="{{ 'concluida' if tarefa['concluida'] else '' }} prioridade-{{ tarefa.prioridade }}">
+                    <input 
+                        type="checkbox" 
+                        onchange="marcarComoConcluida({{ tarefa['id'] }}, this.checked)"
+                        {{ 'checked' if tarefa['concluida'] else '' }}>
+                    
+                    <span id="texto-tarefa-{{ tarefa['id'] }}">{{ tarefa['descricao'] }}</span>
+                    
+                    <div class="botoes">
+                        <button class="edit-btn" onclick="iniciarEdicao({{ tarefa['id'] }}, '{{ tarefa['descricao']|escape }}')">✎</button>
+                        <button class="delete-btn" onclick="deletarTarefa({{ tarefa['id'] }})">×</button>
+                    </div>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <script>
+        // MUDANÇA AQUI: A função agora pega e envia a prioridade
+        async function adicionarTarefa() {
+            const input = document.getElementById('nova-tarefa-input');
+            const prioridadeSelect = document.getElementById('nova-tarefa-prioridade');
+
+            const descricao = input.value.trim();
+            const prioridade = prioridadeSelect.value;
+
+            if (descricao === '') {
+                alert('Por favor, digite uma descrição para a tarefa.');
+                return;
+            };
+
+            const response = await fetch('/api/tarefas', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ descricao: descricao, prioridade: prioridade })
+            });
+
+            if (response.ok) {
+                location.reload(); 
+            } else {
+                alert('Falha ao adicionar a tarefa.');
+            }
+        }
+
+        async function marcarComoConcluida(id, estaConcluida) {
+            await fetch(`/api/tarefas/${id}/concluir`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ concluida: estaConcluida ? 1 : 0 })
+            });
+            document.getElementById(`tarefa-${id}`).classList.toggle('concluida', estaConcluida);
+        }
+
+        async function deletarTarefa(id) {
+            if (!confirm('Tem certeza?')) return;
+            const response = await fetch(`/api/tarefas/${id}`, { method: 'DELETE' });
+            if (response.ok) document.getElementById(`tarefa-${id}`).remove();
+        }
+
+        function iniciarEdicao(id, textoAtual) {
+            const spanTexto = document.getElementById(`texto-tarefa-${id}`);
+            const liItem = document.getElementById(`tarefa-${id}`);
+            const inputEdicao = document.createElement('input');
+            inputEdicao.type = 'text';
+            inputEdicao.value = textoAtual;
+            inputEdicao.className = 'input-edicao';
+            liItem.replaceChild(inputEdicao, spanTexto);
+            inputEdicao.focus();
+            liItem.querySelector('.botoes').style.display = 'none';
+            const btnSalvar = document.createElement('button');
+            btnSalvar.innerText = 'Salvar';
+            btnSalvar.className = 'save-btn';
+            btnSalvar.onclick = () => salvarEdicao(id);
+            liItem.appendChild(btnSalvar);
+        }
+
+        async function salvarEdicao(id) {
+            const liItem = document.getElementById(`tarefa-${id}`);
+            const inputEdicao = liItem.querySelector('.input-edicao');
+            const novaDescricao = inputEdicao.value.trim();
+            if (novaDescricao === '') {
+                alert('A descrição não pode ser vazia.');
+                return;
+            }
+            const response = await fetch(`/api/tarefas/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ descricao: novaDescricao })
+            });
+            if (response.ok) {
+                const spanTexto = document.createElement('span');
+                spanTexto.id = `texto-tarefa-${id}`;
+                spanTexto.innerText = novaDescricao;
+                liItem.replaceChild(spanTexto, inputEdicao);
+                liItem.querySelector('.save-btn').remove();
+                liItem.querySelector('.botoes').style.display = 'flex';
+            } else {
+                alert('Falha ao salvar a tarefa.');
+            }
+        }
+    </script>
+</body>
+</html>
